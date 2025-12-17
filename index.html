@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SENSI PRO AI | CPX AKIRA</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database-compat.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body { background-color: #050505; color: #e2e8f0; font-family: 'Inter', sans-serif; }
+        .font-cyber { font-family: 'Orbitron', sans-serif; }
+        .glass { background: rgba(15, 15, 15, 0.95); backdrop-filter: blur(10px); border: 1px solid rgba(106, 13, 173, 0.3); }
+        .input-dark { background: #000; border: 1px solid #222; border-radius: 12px; padding: 15px; width: 100%; outline: none; transition: 0.3s; }
+        .input-dark:focus { border-color: #6a0dad; box-shadow: 0 0 10px rgba(106, 13, 173, 0.2); }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+
+    <div id="login-screen" class="w-full max-w-sm glass p-8 rounded-[2.5rem] text-center shadow-2xl">
+        <h1 class="font-cyber text-2xl mb-8 italic text-white">CPX <span class="text-purple-600">AKIRA</span></h1>
+        <input type="text" id="key-input" placeholder="COLE SUA CHAVE AQUI" class="input-dark text-center font-bold tracking-widest uppercase mb-6">
+        <button onclick="logar()" class="w-full bg-purple-600 py-4 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-purple-700 transition-all">Autenticar Sistema</button>
+    </div>
+
+    <div id="main-content" class="hidden w-full max-w-lg animate-in fade-in zoom-in duration-500">
+        <div class="glass p-6 rounded-[2.5rem]">
+            <div class="flex justify-between items-center mb-6 px-2">
+                <span class="text-[10px] font-bold text-purple-500 uppercase tracking-widest font-cyber">Auto-Calibration Active</span>
+                <span id="screen-info" class="text-[9px] text-zinc-500 font-mono"></span>
+            </div>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="text-[10px] text-zinc-500 ml-2 uppercase font-bold">Fabricante</label>
+                    <select id="brand" onchange="updateModels()" class="input-dark mt-1">
+                        <option value="">Selecione a Marca</option>
+                        <option value="APPLE">APPLE</option>
+                        <option value="ASUS">ASUS</option>
+                        <option value="INFINIX">INFINIX</option>
+                        <option value="LG">LG</option>
+                        <option value="MOTOROLA">MOTOROLA</option>
+                        <option value="REALME">REALME</option>
+                        <option value="SAMSUNG">SAMSUNG</option>
+                        <option value="XIAOMI">XIAOMI</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="text-[10px] text-zinc-500 ml-2 uppercase font-bold">Modelo do Dispositivo</label>
+                    <select id="model" class="input-dark mt-1">
+                        <option value="">Aguardando Marca...</option>
+                    </select>
+                </div>
+
+                <button onclick="generateSensi()" class="w-full bg-white text-black py-4 rounded-2xl font-black uppercase text-xs mt-4 hover:bg-purple-500 hover:text-white transition-all">Otimizar Sensibilidade</button>
+            </div>
+
+            <div id="results" class="hidden mt-8 grid grid-cols-2 gap-3 animate-in slide-in-from-bottom-4 duration-700">
+                </div>
+        </div>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyADWH-HdJUFByEuHBdHZkf7mDSD1-dBnRA",
+            authDomain: "cpx-akira.firebaseapp.com",
+            databaseURL: "https://cpx-akira-default-rtdb.firebaseio.com",
+            projectId: "cpx-akira",
+            storageBucket: "cpx-akira.firebasestorage.app",
+            messagingSenderId: "126066483108",
+            appId: "1:126066483108:web:ecbc2bb38a8e3e8575eb31"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        // Banco de Dados de Modelos (Ordem Alfabética)
+        const deviceData = {
+            APPLE: ["iPhone 8", "iPhone 8 Plus", "iPhone X", "iPhone XR", "iPhone XS", "iPhone 11", "iPhone 11 Pro", "iPhone 12", "iPhone 13 Pro Max", "iPhone 14", "iPhone 15 Pro"],
+            SAMSUNG: ["Galaxy A03", "Galaxy A10", "Galaxy A20", "Galaxy A31", "Galaxy A54", "Galaxy M23", "Galaxy M54", "Galaxy S10", "Galaxy S20 FE", "Galaxy S21 Ultra", "Galaxy S23 Ultra"],
+            MOTOROLA: ["Moto G8", "Moto G9 Play", "Moto G22", "Moto G30", "Moto G52", "Moto G84", "Motorola Edge 30", "Motorola Edge 40 Neo", "One Fusion"],
+            XIAOMI: ["Poco F3", "Poco F5", "Poco X3 Pro", "Poco X5", "Poco X6 Pro", "Redmi Note 8", "Redmi Note 10", "Redmi Note 11", "Redmi Note 12", "Redmi Note 13 Pro"],
+            REALME: ["Realme 7", "Realme 8 Pro", "Realme 11 Pro+", "Realme C55", "Realme GT Master Edition"],
+            INFINIX: ["Hot 11", "Hot 20i", "Note 12", "Note 30 Pro"]
+        };
+
+        // Detecção de Tela automática
+        const screenWidth = window.screen.width * window.devicePixelRatio;
+        const screenHeight = window.screen.height * window.devicePixelRatio;
+        document.getElementById('screen-info').innerText = `${screenWidth}x${screenHeight} PX`;
+
+        function logar() {
+            const key = document.getElementById('key-input').value.trim();
+            db.ref('chaves/' + key).once('value').then((snap) => {
+                if(snap.exists()){
+                    const d = snap.val();
+                    if(d.validade && d.validade < new Date().getTime()) return alert("KEY EXPIRADA!");
+                    document.getElementById('login-screen').classList.add('hidden');
+                    document.getElementById('main-content').classList.remove('hidden');
+                } else { alert("KEY INVÁLIDA!"); }
+            });
+        }
+
+        function updateModels() {
+            const b = document.getElementById('brand').value;
+            const m = document.getElementById('model');
+            m.innerHTML = '<option value="">Selecione o Modelo</option>';
+            if(b && deviceData[b]) {
+                deviceData[b].sort().forEach(item => {
+                    m.innerHTML += `<option value="${item}">${item}</option>`;
+                });
+            }
+        }
+
+        function generateSensi() {
+            if(!document.getElementById('model').value) return alert("Selecione o dispositivo!");
+            
+            const results = document.getElementById('results');
+            results.classList.remove('hidden');
+            results.innerHTML = "";
+
+            // Lógica de Ajuste por Tela: Telas maiores = Sensi levemente maior
+            const multiplier = (screenWidth > 1080) ? 1.05 : 0.98;
+
+            ['GERAL', 'PONTO VERMELHO', 'MIRA 2X', 'MIRA 4X'].forEach(label => {
+                let val = Math.floor((Math.random() * (100 - 92) + 92) * multiplier);
+                if(val > 100) val = 100;
+
+                results.innerHTML += `
+                    <div class="bg-black/60 p-4 rounded-2xl border border-zinc-800 text-center">
+                        <p class="text-[8px] text-zinc-500 uppercase font-black mb-1">${label}</p>
+                        <p class="text-2xl font-cyber font-bold text-white">${val}</p>
+                    </div>
+                `;
+            });
+            
+            // Adiciona DPI Recomendada baseada na tela
+            const dpiRec = Math.floor((screenWidth / 2.5) + (Math.random() * 50));
+            results.innerHTML += `
+                <div class="col-span-2 bg-purple-600/10 p-4 rounded-2xl border border-purple-500/30 text-center mt-2">
+                    <p class="text-[8px] text-purple-400 uppercase font-black mb-1">DPI RECOMENDADA</p>
+                    <p class="text-xl font-cyber font-bold text-white">${dpiRec}</p>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>
